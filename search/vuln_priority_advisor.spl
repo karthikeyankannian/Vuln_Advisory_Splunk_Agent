@@ -1,0 +1,94 @@
+index=soc_agent_demo sourcetype="soc:agent:vulnerability"
+    run_id="<RUN_ID_FROM_GENERATOR_OUTPUT>"
+    earliest=0 latest=now
+| eval cvss=tonumber(cvss)
+| eval priority_rule=case(
+    known_exploited="yes"
+        AND (internet_facing="yes" OR asset_criticality="critical"), "R1",
+    known_exploited="yes"
+        OR (cvss>=9 AND internet_facing="yes"), "R2",
+    cvss>=7, "R3",
+    true(), "R4"
+  )
+| eval priority=case(
+    priority_rule="R1", "P1",
+    priority_rule="R2", "P2",
+    priority_rule="R3", "P3",
+    priority_rule="R4", "P4"
+  )
+| eval priority_reason=case(
+    priority_rule="R1",
+      "Known-exploited flag yes AND (internet-facing yes OR asset criticality critical)",
+    priority_rule="R2",
+      "R1 not matched; known-exploited flag yes OR (CVSS >= 9 AND internet-facing yes)",
+    priority_rule="R3",
+      "R1 and R2 not matched; CVSS >= 7",
+    priority_rule="R4",
+      "No higher-priority demo rule matched"
+  )
+| eval finding_evidence="finding_id=".finding_id
+    ."; asset=".asset
+    ."; cvss=".cvss
+    ."; internet_facing=".internet_facing
+    ."; asset_criticality=".asset_criticality
+    ."; known_exploited=".known_exploited
+    ."; exploitation_on_asset=".exploitation_on_asset
+    ."; synthetic=".synthetic
+    ."; priority_policy=".priority_policy
+    ."; priority_rule=".priority_rule
+    ."; priority=".priority
+    ."; priority_reason=".priority_reason
+| stats
+    count as finding_count
+    count(eval(priority="P1")) as p1_count
+    count(eval(priority="P2")) as p2_count
+    count(eval(priority="P3")) as p3_count
+    count(eval(priority="P4")) as p4_count
+    values(finding_evidence) as finding_records
+    by run_id
+| eval evidence=mvjoin(finding_records," || ")
+| fields run_id finding_count p1_count p2_count p3_count p4_count evidence
+| aiagent agent_name="VulnPriorityAdvisor" prompt="Produce a concise vulnerability prioritisation briefing from the supplied synthetic evidence.
+
+RUN:
+run_id={run_id}
+finding_count={finding_count}
+P1={p1_count}
+P2={p2_count}
+P3={p3_count}
+P4={p4_count}
+
+PRIORITY PROVENANCE:
+Upstream SPL calculated priorities using the demo_v1 lab policy.
+Rules were evaluated in order, and the first matching rule determined priority:
+R1 assigns P1 when known_exploited=yes AND (internet_facing=yes OR asset_criticality=critical).
+R2 assigns P2 to remaining findings when known_exploited=yes OR (cvss>=9 AND internet_facing=yes).
+R3 assigns P3 to remaining findings when cvss>=7.
+R4 assigns P4 to all remaining findings.
+These are synthetic demonstration rules, not an approved production remediation policy.
+
+FINDING EVIDENCE:
+{evidence}
+
+INSTRUCTIONS:
+Preserve all supplied priorities, counts, matched rules, and field values.
+State that upstream SPL assigned priorities using demo_v1; do not say the assignment method is missing.
+Do not claim that you calculated priorities.
+For each finding, explain the actual supported rule branches, not every possible OR branch.
+A known-exploited flag does not prove exploitation of the listed asset.
+A false known-exploited flag does not prove absence of exploitation.
+Preserve exploitation_on_asset=not_assessed.
+Do not infer business functions or impact from hostnames.
+Do not invent CVEs, patches, owners, deadlines, or completed actions.
+Do not search or call tools.
+
+OUTPUT:
+Use plain text without Markdown symbols, tables, or pipe-delimited output.
+Keep the briefing under 400 words.
+Return:
+Executive summary with total findings, priority distribution, and SPL priority provenance.
+Four numbered findings, each stating finding ID, asset, priority, matched rule, and supported reason.
+Recommended analyst validation steps.
+Missing information and limitations.
+Explicitly identify the evidence as synthetic demonstration data."
+| table agent_name status result_1 error

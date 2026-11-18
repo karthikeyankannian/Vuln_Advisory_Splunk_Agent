@@ -1,0 +1,5 @@
+Review the supplied synthetic vulnerability evidence. Summarize the
+priority distribution and explain each finding's supplied priority using
+the recorded policy and matched rule. Preserve the supplied values,
+identify evidence limitations, and recommend analyst validation steps.
+If no findings are available, request evidence instead of inventing findings.

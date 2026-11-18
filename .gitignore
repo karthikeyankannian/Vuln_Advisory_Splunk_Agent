@@ -1,0 +1,7 @@
+# Generated data and local artefacts
+vulnerabilities.json
+*.har
+*.log
+__pycache__/
+*.pyc
+.DS_Store

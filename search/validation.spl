@@ -1,0 +1,12 @@
+``` 1. Event count and distinct findings. Expect 4 and 4 per generator run. ```
+index=soc_agent_demo sourcetype="soc:agent:vulnerability"
+| stats count as event_count dc(finding_id) as distinct_findings
+
+``` 2. Single-valued fields. Expect finding_id_values=1 and asset_values=1.
+    Do not add an unqualified spath here: KV_MODE=json already extracts
+    the fields, and a second extraction duplicates every value. ```
+index=soc_agent_demo sourcetype="soc:agent:vulnerability"
+| eval finding_id_values=mvcount(finding_id), asset_values=mvcount(asset)
+| table finding_id asset cvss internet_facing asset_criticality
+    known_exploited finding_id_values asset_values
+| sort 0 finding_id
